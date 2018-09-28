@@ -7,16 +7,21 @@
 # Maximize reward over 1000 time steps
 rm(list=ls())
 
+MIN_REWARD = 500
+MAX_REWARD = 1000
+AVG_REWARD = (MAX_REWARD-MIN_REWARD)/2 + MIN_REWARD
+
+
 ### VALUE ESTIMATORS
 mean_estimator = function(previous_rewards) {
   if (length(previous_rewards) == 0) {
-    return(100); # Initial value goes here
+    return(AVG_REWARD*.5); # Initial value goes here
   }
   return (mean(previous_rewards)) # Replace with actual logic here
 }
 alpha_value_estimator = function(alpha, previous_rewards) {
   if (length(previous_rewards) == 0) {
-    return(100); # Initial value goes here
+    return(AVG_REWARD*.5); # Initial value goes here
   }
   triesWithBandits = length(previous_rewards);
   reward_indices = 1:triesWithBandits
@@ -48,7 +53,7 @@ create_bandit = function(mu_reward, std_reward) {
 }
 random_bandits = function(num_bandits) {
   return(t(mapply(create_bandit, 
-                runif(num_bandits, 5, 10),
+                runif(num_bandits, MIN_REWARD, MAX_REWARD),
                 rexp(num_bandits, 1))))
 }
 
@@ -106,22 +111,31 @@ simulate_runs = function(num_simulations, num_tries, num_bandits, value_estimato
 
 
 # Mean estimators, greedy selector
-meangreedy = simulate_runs(10000, 10, 20, mean_estimator, greedy_selector);
+#meangreedy = simulate_runs(1000, 100, 5, mean_estimator, greedy_selector);
 
-epsilons = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9);
+epsilons = seq(0,.5,.05)
 mu_vector = numeric(0);
 md_vector = numeric(0);
 sd_vector = numeric(0);
+stephen <- data.frame(epsilon=numeric(0), value=numeric(0))
 for (epsilon in epsilons) {
-  current_run = simulate_runs(10000, 10, 20, mean_estimator, function(x) { greedy_epsilon_selector(epsilon, x) });
+  cat("epsilon =",epsilon,"...\n")
+  current_run = simulate_runs(1000, 100, 5, mean_estimator, function(x) { greedy_epsilon_selector(epsilon, x) });
   mu_vector = c(mu_vector, current_run$mu);
   #md_vector = c(md_vector, median(current_run$rewards))
   sd_vector = c(sd_vector, current_run$std);
+    stephen <- rbind(stephen,cbind(epsilon, current_run$rewards))
 }
 
 
 library(ggplot2)
-ggplot(data.frame(epsilons, mu_vector), aes(x = epsilons, y = mu_vector)) + geom_point() + ggtitle("Mean Reward") + theme_bw()
+p <- ggplot(data.frame(epsilons, mu_vector), aes(x = epsilons, y = mu_vector)) + geom_point() + ggtitle("Mean Reward") + theme_bw() + ylim(0,max(mu_vector))
+#print(p)
+X11()
 #ggplot(data.frame(epsilons, md_vector), aes(x = epsilons, y = md_vector)) + geom_point() + ggtitle("Median Reward") + theme_bw()
-ggplot(data.frame(epsilons, sd_vector), aes(x = epsilons, y = sd_vector)) + geom_point()  + ggtitle("Standard Deviation of Rewards") + theme_bw()
+p2 <- ggplot(data.frame(epsilons, sd_vector), aes(x = epsilons, y = sd_vector)) + geom_point()  + ggtitle("Standard Deviation of Rewards") + theme_bw() + ylim(0,max(sd_vector))
+#print(p2)
 
+colnames(stephen) <- c("epsilon","value")
+p3 <- ggplot(stephen, aes(x=as.factor(epsilon), y=value)) + geom_boxplot()
+print(p3)
