@@ -113,29 +113,29 @@ simulate_runs = function(num_simulations, num_tries, num_bandits, value_estimato
 # Mean estimators, greedy selector
 #meangreedy = simulate_runs(1000, 100, 5, mean_estimator, greedy_selector);
 
-epsilons = seq(0,.5,.05)
+alphas = seq(0,1,.1)
 mu_vector = numeric(0);
 md_vector = numeric(0);
 sd_vector = numeric(0);
 stephen <- data.frame(epsilon=numeric(0), value=numeric(0))
-for (epsilon in epsilons) {
-  cat("epsilon =",epsilon,"...\n")
-  current_run = simulate_runs(1000, 100, 5, mean_estimator, function(x) { greedy_epsilon_selector(epsilon, x) });
+for (alpha in alphas) {
+  cat("alpha =",alpha,"...\n")
+  current_run = simulate_runs(1000, 100, 5, function(x) { alpha_value_estimator(alpha,x) }, function(x) { greedy_epsilon_selector(.1, x) });
   mu_vector = c(mu_vector, current_run$mu);
   #md_vector = c(md_vector, median(current_run$rewards))
   sd_vector = c(sd_vector, current_run$std);
-    stephen <- rbind(stephen,cbind(epsilon, current_run$rewards))
+    stephen <- rbind(stephen,cbind(alpha, current_run$rewards))
 }
 
 
 library(ggplot2)
-p <- ggplot(data.frame(epsilons, mu_vector), aes(x = epsilons, y = mu_vector)) + geom_point() + ggtitle("Mean Reward") + theme_bw() + ylim(0,max(mu_vector))
-#print(p)
-X11()
-#ggplot(data.frame(epsilons, md_vector), aes(x = epsilons, y = md_vector)) + geom_point() + ggtitle("Median Reward") + theme_bw()
-p2 <- ggplot(data.frame(epsilons, sd_vector), aes(x = epsilons, y = sd_vector)) + geom_point()  + ggtitle("Standard Deviation of Rewards") + theme_bw() + ylim(0,max(sd_vector))
-#print(p2)
+#p <- ggplot(data.frame(epsilons, mu_vector), aes(x = epsilons, y = mu_vector)) + geom_point() + ggtitle("Mean Reward") + theme_bw() + ylim(0,max(mu_vector))
+##print(p)
+#X11()
+##ggplot(data.frame(epsilons, md_vector), aes(x = epsilons, y = md_vector)) + geom_point() + ggtitle("Median Reward") + theme_bw()
+#p2 <- ggplot(data.frame(epsilons, sd_vector), aes(x = epsilons, y = sd_vector)) + geom_point()  + ggtitle("Standard Deviation of Rewards") + theme_bw() + ylim(0,max(sd_vector))
+##print(p2)
 
-colnames(stephen) <- c("epsilon","value")
-p3 <- ggplot(stephen, aes(x=as.factor(epsilon), y=value)) + geom_boxplot()
+colnames(stephen) <- c("alpha","value")
+p3 <- ggplot(stephen, aes(x=as.factor(alpha), y=value)) + geom_boxplot() + ylim(0,max(stephen$value))
 print(p3)
