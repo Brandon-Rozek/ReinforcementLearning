@@ -103,3 +103,25 @@ simulate_runs = function(num_simulations, num_tries, num_bandits, value_estimato
     rewards = total_rewards
   ))
 }
+
+
+# Mean estimators, greedy selector
+meangreedy = simulate_runs(10000, 10, 20, mean_estimator, greedy_selector);
+
+epsilons = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9);
+mu_vector = numeric(0);
+md_vector = numeric(0);
+sd_vector = numeric(0);
+for (epsilon in epsilons) {
+  current_run = simulate_runs(10000, 10, 20, mean_estimator, function(x) { greedy_epsilon_selector(epsilon, x) });
+  mu_vector = c(mu_vector, current_run$mu);
+  #md_vector = c(md_vector, median(current_run$rewards))
+  sd_vector = c(sd_vector, current_run$std);
+}
+
+
+library(ggplot2)
+ggplot(data.frame(epsilons, mu_vector), aes(x = epsilons, y = mu_vector)) + geom_point() + ggtitle("Mean Reward") + theme_bw()
+#ggplot(data.frame(epsilons, md_vector), aes(x = epsilons, y = md_vector)) + geom_point() + ggtitle("Median Reward") + theme_bw()
+ggplot(data.frame(epsilons, sd_vector), aes(x = epsilons, y = sd_vector)) + geom_point()  + ggtitle("Standard Deviation of Rewards") + theme_bw()
+
