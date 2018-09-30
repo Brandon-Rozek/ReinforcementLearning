@@ -13,15 +13,15 @@ AVG_REWARD = (MAX_REWARD-MIN_REWARD)/2 + MIN_REWARD
 
 
 ### VALUE ESTIMATORS
-mean_estimator = function(previous_rewards) {
+mean_estimator = function(previous_rewards, initial_reward) {
   if (length(previous_rewards) == 0) {
-    return(AVG_REWARD*.5); # Initial value goes here
+    return(initial_reward);
   }
   return (mean(previous_rewards)) # Replace with actual logic here
 }
-alpha_value_estimator = function(alpha, previous_rewards) {
+alpha_value_estimator = function(alpha, previous_rewards, initial_reward) {
   if (length(previous_rewards) == 0) {
-    return(AVG_REWARD*.5); # Initial value goes here
+    return(initial_reward);
   }
   triesWithBandits = length(previous_rewards);
   reward_indices = 1:triesWithBandits
@@ -75,7 +75,7 @@ get_reward = function(bandits, bandit_number) {
   return(reward)
 }
 sum_rewards = function(rewards) {
-  return(sum(sapply(rewards, sum)));
+  return(sum(sapply(rewards, sum))); # First sum for each bandit then combine those sums
 }
 
 
@@ -112,6 +112,11 @@ simulate_runs = function(num_simulations, num_tries, num_bandits, value_estimato
 
 ##### MAIN BELOW
 
+INITIAL_VALUE = AVG_REWARD * .5;
+NUM_SIMULATIONS = 1000;
+NUM_TRIALS = 100
+NUM_BANDITS = 5;
+
 library(parallel)
 no_cores <- detectCores() - 1
 cl <- makeCluster(no_cores, type = "FORK")
@@ -123,8 +128,8 @@ library(purrr)
 
 alphaRewards = lapply(alphas, function(alpha) {
   cbind(alpha, 
-        simulate_runs(1000, 100, 5, 
-                      function(x) { alpha_value_estimator(alpha,x) }, function(x) { greedy_epsilon_selector(.1, x) }
+        simulate_runs(NUM_SIMULATIONS, NUM_TRIALS, NUM_BANDITS, 
+                      function(x) { alpha_value_estimator(alpha, x, INITIAL_VALUE) }, function(x) { greedy_epsilon_selector(.1, x) }
         , cl));
 }) %>% reduce(rbind);
 
@@ -140,8 +145,8 @@ print(p3)
 epsilons = seq(0, 1, 0.1)
 epsilonRewards = lapply(epsilons, function(epsilon) {
   cbind(epsilon,
-        simulate_runs(1000, 100, 5,
-                      mean_estimator, function(x) { greedy_epsilon_selector(epsilon, x)}, 
+        simulate_runs(NUM_SIMULATIONS, NUM_TRIALS, NUM_BANDITS,
+                      function(x) { mean_estimator(x, INITIAL_VALUE) } , function(x) { greedy_epsilon_selector(epsilon, x)}, 
         cl))
 }) %>% reduce(rbind);
 colnames(epsilonRewards) = c("Epsilon", "TotalRewardForSim");
@@ -149,7 +154,37 @@ colnames(epsilonRewards) = c("Epsilon", "TotalRewardForSim");
 epsilonRewards = as.data.frame(epsilonRewards);
 p4 <- ggplot(epsilonRewards, aes(x = as.factor(Epsilon), y = TotalRewardForSim)) +
         geom_boxplot() + ylim(0, max(epsilonRewards$TotalRewardForSim)) +
-        theme_bw() + ggtitle("Total Rewards by Epsilon Level") + xlab("Epsilon") + ylab("Total Rewards")
+        theme_bw() + ggtitle("Total Rewards by Epsilon Level") + xlab("Epsilon") + ylab("Total Rewards") 
 print(p4)
+
+initialEstimates = seq(MIN_REWARD / 2, MAX_REWARD * 2, length.out = 10)
+initialRewards = lapply(initialEstimates, function(initial) {
+  cbind(initial,
+        simulate_runs(NUM_SIMULATIONS, NUM_TRIALS, NUM_BANDITS,
+                      function(x) { mean_estimator(x, initial)}, greedy_selector
+        , cl))
+}) %>% reduce(rbind);
+colnames(initialRewards) = c("InitialReward", "TotalRewardForSim")
+
+initialRewards = as.data.frame(initialRewards)
+p5 <- ggplot(initialRewards, aes(x = as.factor(InitialReward), y = TotalRewardForSim)) +
+        geom_boxplot() + ylim(0, max(initialRewards$TotalRewardForSim)) + xlab("Initial Reward") + ylab("Total Rewards") +
+        theme_bw() + ggtitle("Rewards by Initial Reward Chosen")
+print(p5);
+
+numberBandits = seq(NUM_TRIALS / 2, NUM_TRIALS * 2, length.out = 10);
+numberBanditsRewards = lapply(numberBandits, function(num_bandit) {
+  cbind(num_bandit,
+        simulate_runs(NUM_SIMULATIONS, NUM_TRIALS, num_bandit,
+                      function(x) { mean_estimator(x, INITIAL_VALUE)}, greedy_selector, cl))
+}) %>% reduce(rbind);
+colnames(numberBanditsRewards) = c("NumBandits", "TotalRewardForSim")
+
+numberBanditsRewards = as.data.frame(numberBanditsRewards)
+p6 <- ggplot(numberBanditsRewards, aes(x = as.factor(NumBandits), y = TotalRewardForSim)) +
+        geom_boxplot() + ylim(0, max(numberBanditsRewards$TotalRewardForSim)) + xlab("Num Bandits") + ylab("Total Rewards") +
+        theme_bw() + ggtitle("Rewards by Number of Bandits")
+print(p6);
+
 
 stopCluster(cl);
