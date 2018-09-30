@@ -57,6 +57,7 @@ random_bandits = function(num_bandits) {
                 rexp(num_bandits, 1))))
 }
 
+
 ### REWARD FUNCTIONS
 get_reward = function(bandits, bandit_number) {
   if (bandit_number > nrow(bandits)) {
@@ -97,45 +98,58 @@ simulate_run = function(num_tries, num_bandits, value_estimator, action_selector
     value_estimates = value_estimates
   ))
 }
-simulate_runs = function(num_simulations, num_tries, num_bandits, value_estimator, action_selector) {
-  total_rewards = numeric(num_simulations);
-  for (i in 1:num_simulations) {
-    total_rewards[i] = sum_rewards(simulate_run(num_tries, num_bandits, value_estimator, action_selector)$rewards);
+
+simulate_runs = function(num_simulations, num_tries, num_bandits, value_estimator, action_selector, cluster) {
+  sum_reward_simulation = function(i_simulation) {
+    sum_rewards(simulate_run(num_tries, num_bandits, value_estimator, action_selector)$rewards)
   }
-  return(list(
-    mu = mean(total_rewards),
-    std = sd(total_rewards),
-    rewards = total_rewards
-  ))
+  if (missing(cluster)) {
+    return(sapply(1:num_simulations, sum_reward_simulation))
+  } else {
+    return(parSapply(cluster, 1:num_simulations, sum_reward_simulation))
+  }
 }
 
+##### MAIN BELOW
 
-# Mean estimators, greedy selector
-#meangreedy = simulate_runs(1000, 100, 5, mean_estimator, greedy_selector);
+library(parallel)
+no_cores <- detectCores() - 1
+cl <- makeCluster(no_cores, type = "FORK")
 
-alphas = seq(0,1,.1)
-mu_vector = numeric(0);
-md_vector = numeric(0);
-sd_vector = numeric(0);
-stephen <- data.frame(epsilon=numeric(0), value=numeric(0))
-for (alpha in alphas) {
-  cat("alpha =",alpha,"...\n")
-  current_run = simulate_runs(1000, 100, 5, function(x) { alpha_value_estimator(alpha,x) }, function(x) { greedy_epsilon_selector(.1, x) });
-  mu_vector = c(mu_vector, current_run$mu);
-  #md_vector = c(md_vector, median(current_run$rewards))
-  sd_vector = c(sd_vector, current_run$std);
-    stephen <- rbind(stephen,cbind(alpha, current_run$rewards))
-}
 
+alphas = seq(0,1, 0.1)
+
+library(purrr)
+
+alphaRewards = lapply(alphas, function(alpha) {
+  cbind(alpha, 
+        simulate_runs(1000, 100, 5, 
+                      function(x) { alpha_value_estimator(alpha,x) }, function(x) { greedy_epsilon_selector(.1, x) }
+        , cl));
+}) %>% reduce(rbind);
+
+colnames(alphaRewards) = c("Alpha", "TotalRewardForSim");
 
 library(ggplot2)
-#p <- ggplot(data.frame(epsilons, mu_vector), aes(x = epsilons, y = mu_vector)) + geom_point() + ggtitle("Mean Reward") + theme_bw() + ylim(0,max(mu_vector))
-##print(p)
-#X11()
-##ggplot(data.frame(epsilons, md_vector), aes(x = epsilons, y = md_vector)) + geom_point() + ggtitle("Median Reward") + theme_bw()
-#p2 <- ggplot(data.frame(epsilons, sd_vector), aes(x = epsilons, y = sd_vector)) + geom_point()  + ggtitle("Standard Deviation of Rewards") + theme_bw() + ylim(0,max(sd_vector))
-##print(p2)
-
-colnames(stephen) <- c("alpha","value")
-p3 <- ggplot(stephen, aes(x=as.factor(alpha), y=value)) + geom_boxplot() + ylim(0,max(stephen$value))
+alphaRewards = as.data.frame(alphaRewards)
+p3 <- ggplot(alphaRewards, aes(x=as.factor(Alpha), y=TotalRewardForSim)) +
+        geom_boxplot() + ylim(0, max(alphaRewards$TotalRewardForSim)) + 
+        theme_bw() + ggtitle("Total Rewards by Alpha Level") + xlab("Alpha") + ylab("Total Rewards")
 print(p3)
+
+epsilons = seq(0, 1, 0.1)
+epsilonRewards = lapply(epsilons, function(epsilon) {
+  cbind(epsilon,
+        simulate_runs(1000, 100, 5,
+                      mean_estimator, function(x) { greedy_epsilon_selector(epsilon, x)}, 
+        cl))
+}) %>% reduce(rbind);
+colnames(epsilonRewards) = c("Epsilon", "TotalRewardForSim");
+
+epsilonRewards = as.data.frame(epsilonRewards);
+p4 <- ggplot(epsilonRewards, aes(x = as.factor(Epsilon), y = TotalRewardForSim)) +
+        geom_boxplot() + ylim(0, max(epsilonRewards$TotalRewardForSim)) +
+        theme_bw() + ggtitle("Total Rewards by Epsilon Level") + xlab("Epsilon") + ylab("Total Rewards")
+print(p4)
+
+stopCluster(cl);
