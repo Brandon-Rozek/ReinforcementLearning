@@ -187,10 +187,32 @@ plotNumberBanditRewards = function(numberBanditsRewards) {
   print(p);
   return(p);
 }
+
+generateDataset = function(cluster) {
+  NUM_TRIALS = 2; # This gives us different parameters to try out
+  NUM_RUNS = 200; # This gives us a way to average each parameter set
+  NUM_ITER_PER_RUN = 1000; # Goal is to maximize 1000 runs
+  min_rewards = runif(NUM_TRIALS, 0, 500);
+  max_rewards = min_rewards + 500;
+  initial_values = runif(NUM_TRIALS, 500, 1000);
+  num_bandits = sample(5:5000, NUM_TRIALS, replace = T); 
+  epsilons = runif(NUM_TRIALS, 0, 1);
+  rewards = mapply(function(min_reward, max_reward, initial_value, num_bandit, epsilon, i) {
+    if (((i - 1) / NUM_TRIALS) * 100 %% 10 == 0 ) { cat(paste(((i - 1) / NUM_TRIALS) * 100, "% Complete...", sep = "")) }
+    result = simulate_runs(NUM_RUNS, NUM_ITER_PER_RUN, num_bandit,
+                           function(x) { mean_estimator(x, initial_value) }, function(x) { greedy_epsilon_selector(epsilon, x) }, 
+                           min_reward, max_reward, cluster);
+    return(cbind(min_reward, max_reward, initial_value, num_bandit, epsilon, num_bandit / NUM_ITER_PER_RUN, result))
+  }, min_rewards, max_rewards, initial_values, num_bandits, epsilons, 1:NUM_TRIALS) %>% reduce(rbind);
+  colnames(rewards) = c("min_reward", "max_reward", "initial_value", "num_bandits", "epsilon", "bandit_iter_ratio", "total_reward");
+  return(rewards)
+}
 ################# MAIN
 library(parallel)
 library(purrr)
 library(ggplot2)
+
+
 
 plotAll = function() {
   ##### MAIN BELOW
